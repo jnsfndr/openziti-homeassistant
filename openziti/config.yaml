@@ -1,0 +1,30 @@
+name: "OpenZiti Tunnel"
+description: "Zero Trust bidirectional networking for Home Assistant via OpenZiti"
+version: "2.0.0"
+slug: "openziti"
+url: "https://github.com/openziti/ziti-tunnel-sdk-c"
+startup: services
+init: false
+arch:
+  - aarch64
+  - amd64
+  - armv7
+hassio_api: true
+host_network: true
+map:
+  - share:rw
+privileged:
+  - NET_ADMIN
+  - NET_RAW
+devices:
+  - /dev/net/tun
+options:
+  EnrollmentJWT: ""
+  IdentityDirectory: "/share/openziti/identities"
+  LogLevel: 3
+  ResolutionRange: "100.64.0.1/10"
+schema:
+  EnrollmentJWT: str?
+  IdentityDirectory: str
+  LogLevel: "int(1,7)"
+  ResolutionRange: str

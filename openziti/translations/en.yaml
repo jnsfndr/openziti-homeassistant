@@ -1,0 +1,21 @@
+configuration:
+  EnrollmentJWT:
+    name: Enrollment JWT
+    description: >-
+      JWT token from your OpenZiti controller for identity enrollment.
+      Paste the JWT text here, then restart the add-on. After successful
+      enrollment, you can clear this field.
+  IdentityDirectory:
+    name: Identity Directory
+    description: >-
+      Directory where enrolled identity files (.json) are stored.
+      Defaults to /share/openziti/identities (persists across reinstalls).
+  LogLevel:
+    name: Log Level
+    description: >-
+      Verbosity level for ziti-edge-tunnel (1 = minimal, 7 = maximum debug).
+  ResolutionRange:
+    name: Resolution Range
+    description: >-
+      CIDR range for Ziti service IP assignments and the TUN interface.
+      Default: 100.64.0.1/10 (DNS nameserver at 100.64.0.2).

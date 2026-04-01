@@ -1,0 +1,70 @@
+#!/usr/bin/with-contenv bashio
+####################################################################################################
+# OpenZiti Add-on — ziti-edge-tunnel Service
+# Long-running service managed by S6. Uses exec so S6 can signal the process directly.
+#
+# DNS strategy: Ziti DNS is set as FIRST resolver, original DHCP-assigned DNS as SECOND.
+# Ziti DNS answers for known Ziti services and REFUSEs everything else.
+# The second resolver then handles all non-Ziti domains.
+# No --dns-upstream needed — the system resolver chain handles fallback.
+####################################################################################################
+
+# Read configuration
+LogLevel="$(bashio::config 'LogLevel')"
+IdentityDirectory="$(bashio::config 'IdentityDirectory')"
+ResolutionRange="$(bashio::config 'ResolutionRange')"
+
+# Determine the Ziti DNS IP from ResolutionRange
+# ziti-edge-tunnel binds its DNS nameserver on base IP + 1
+# e.g. 100.64.0.1/10 → nameserver on 100.64.0.2
+RANGE_BASE="${ResolutionRange%%/*}"
+IFS='.' read -r O1 O2 O3 O4 <<< "${RANGE_BASE}"
+ZITI_DNS_IP="${O1}.${O2}.${O3}.$((O4 + 1))"
+
+# Save current HA DNS servers before we override them, so we can restore on shutdown
+ORIGINAL_DNS="$(ha dns info --raw-json 2>/dev/null \
+    | jq -r '[.data.servers[]] | join(",")' 2>/dev/null || echo "")"
+echo "${ORIGINAL_DNS}" > /tmp/original_dns_servers
+
+bashio::log.info "Original HA DNS servers: ${ORIGINAL_DNS:-<none>}"
+
+# Detect the DHCP-assigned / existing DNS resolver to keep as fallback
+FALLBACK_DNS=""
+if bashio::var.has_value "${ORIGINAL_DNS}"; then
+    # Use the first existing server (strip dns:// prefix if present)
+    FALLBACK_DNS="${ORIGINAL_DNS%%,*}"
+    FALLBACK_DNS="${FALLBACK_DNS#dns://}"
+else
+    # Try local DNS from HA DNS info
+    FALLBACK_DNS="$(ha dns info --raw-json 2>/dev/null \
+        | jq -r '[.data.locals[]][0] | sub("dns://"; "")' 2>/dev/null \
+        || echo "1.1.1.1")"
+fi
+
+bashio::log.info "Identity directory : ${IdentityDirectory}"
+bashio::log.info "Resolution range   : ${ResolutionRange}"
+bashio::log.info "Ziti DNS IP        : ${ZITI_DNS_IP}"
+bashio::log.info "Fallback DNS       : ${FALLBACK_DNS}"
+bashio::log.info "Log level          : ${LogLevel}"
+
+# Set HA system DNS: Ziti resolver FIRST, then original DHCP resolver as fallback
+# When Ziti DNS doesn't know a domain, it returns REFUSE → HA tries the second server
+bashio::log.notice "Setting HA DNS: ${ZITI_DNS_IP} (Ziti) + ${FALLBACK_DNS} (fallback)"
+if ha dns options --servers "dns://${ZITI_DNS_IP}" --servers "dns://${FALLBACK_DNS}" 2>/dev/null; then
+    bashio::log.info "HA DNS successfully configured"
+else
+    bashio::log.warning "Failed to configure HA DNS — Ziti service name resolution may not work"
+fi
+
+# Build command arguments — no --dns-upstream since we use dual-resolver strategy
+ARGS=(
+    run
+    --identity-dir "${IdentityDirectory}"
+    --dns-ip-range "${ResolutionRange}"
+    --verbose "${LogLevel}"
+)
+
+bashio::log.notice "Starting ziti-edge-tunnel: /opt/openziti/ziti-edge-tunnel ${ARGS[*]}"
+
+# exec replaces this shell process — S6 manages the tunnel directly
+exec /opt/openziti/ziti-edge-tunnel "${ARGS[@]}"

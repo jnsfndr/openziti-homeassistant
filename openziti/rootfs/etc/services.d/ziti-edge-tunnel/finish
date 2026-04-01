@@ -1,0 +1,37 @@
+#!/usr/bin/with-contenv bashio
+####################################################################################################
+# OpenZiti Add-on — ziti-edge-tunnel Finish Script
+# Called by S6 when the service exits. Restores original DNS servers.
+####################################################################################################
+
+bashio::log.notice "ziti-edge-tunnel exited with code ${1}"
+
+# Restore HA DNS to the original servers (saved before tunnel start)
+if [[ -f /tmp/original_dns_servers ]]; then
+    ORIGINAL_DNS="$(cat /tmp/original_dns_servers)"
+    if bashio::var.has_value "${ORIGINAL_DNS}"; then
+        # Rebuild --servers arguments from comma-separated list
+        DNS_ARGS=()
+        IFS=',' read -ra DNS_LIST <<< "${ORIGINAL_DNS}"
+        for DNS_ENTRY in "${DNS_LIST[@]}"; do
+            # Ensure dns:// prefix
+            DNS_ENTRY="${DNS_ENTRY#dns://}"
+            DNS_ARGS+=(--servers "dns://${DNS_ENTRY}")
+        done
+        bashio::log.notice "Restoring HA DNS to original servers: ${ORIGINAL_DNS}"
+        if ha dns options "${DNS_ARGS[@]}" 2>/dev/null; then
+            bashio::log.info "HA DNS successfully restored"
+        else
+            bashio::log.warning "Failed to restore HA DNS"
+        fi
+    else
+        bashio::log.warning "No original DNS servers were saved — cannot restore"
+    fi
+    rm -f /tmp/original_dns_servers
+fi
+
+# If the process crashed (non-zero, non-signal exit), halt the add-on
+if [[ "${1}" -ne 0 ]] && [[ "${1}" -ne 256 ]]; then
+    bashio::log.error "ziti-edge-tunnel crashed — halting add-on"
+    /run/s6/basedir/bin/halt
+fi
