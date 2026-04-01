@@ -65,6 +65,13 @@ function RunEnrollment() {
 
     if "${RUNTIME}" enroll --jwt "${JWT_FILE}" --identity "${IDENTITY_FILE}" 2>&1; then
         bashio::log.notice "ENROLLMENT: Success — identity saved to ${IDENTITY_FILE}"
+        # Clear the JWT from add-on config to prevent duplicate enrollment attempts
+        bashio::log.info "ENROLLMENT: Clearing JWT from add-on configuration..."
+        if bashio::addon.option 'EnrollmentJWT' ""; then
+            bashio::log.info "ENROLLMENT: JWT cleared from configuration"
+        else
+            bashio::log.warning "ENROLLMENT: Could not clear JWT from configuration — please clear it manually"
+        fi
     else
         bashio::log.error "ENROLLMENT: Failed — check that the JWT is valid and not expired"
         # Clean up failed enrollment artifacts
