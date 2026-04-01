@@ -54,14 +54,11 @@ When Home Assistant (or any integration) resolves a Ziti service name, the tunne
 2. Download the JWT enrollment token
 3. Paste the JWT into the add-on's `EnrollmentJWT` configuration field
 4. Start (or restart) the add-on
-5. The JWT is saved as a `.jwt` file in the identity directory
-6. `ziti-edge-tunnel` automatically enrolls the JWT at startup and creates a `.json` identity
+5. The add-on enrolls the JWT and creates a `.json` identity file
+6. The JWT is automatically cleared from the configuration after successful enrollment
 7. Check the add-on logs to verify enrollment succeeded
-8. Clear the `EnrollmentJWT` field (recommended — the identity is already persisted)
 
-Multiple identities are supported — repeat the enrollment process with different JWTs.
-
-**Alternative**: You can also manually place `.jwt` files in the identity directory (`/share/openziti/identities/`). They will be auto-enrolled at the next add-on start.
+Multiple identities are supported — repeat the enrollment process with different JWTs. Each enrollment creates a separate identity file in `/share/openziti/identities/`.
 
 ## DNS Behavior
 
