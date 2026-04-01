@@ -8,10 +8,15 @@ This add-on runs `ziti-edge-tunnel` in `run` mode, providing:
 
 ## Installation
 
-1. Add this repository to your Home Assistant add-on store
-2. Install the "OpenZiti Tunnel" add-on
-3. Configure the add-on (see below)
-4. Start the add-on
+[![Add Repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fjnsfndr%2Fopenziti-homeassistant)
+
+Or manually:
+
+1. Go to **Settings > Add-ons > Add-on Store > ... (top right) > Repositories**
+2. Add `https://github.com/jnsfndr/openziti-homeassistant`
+3. Install the "OpenZiti Tunnel" add-on
+4. Configure the add-on (see below)
+5. Start the add-on
 
 ## Configuration
 
