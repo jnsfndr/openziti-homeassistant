@@ -7,6 +7,7 @@ ARG BUILD_ARCH
 ARG ZET_VERSION="1.11.1"
 
 # Install runtime dependencies and download pre-built ziti-edge-tunnel binary
+# gcompat: glibc compatibility layer — ziti-edge-tunnel binaries are glibc-linked, Alpine uses musl
 # Packages aligned with official openziti/ziti-edge-tunnel image:
 #   iproute2 = iproute (Alpine), procps for debugging (ps, top), jq, socat for IPC socket queries
 RUN \
@@ -17,6 +18,7 @@ RUN \
         *)          echo "Unsupported architecture: ${BUILD_ARCH}" && exit 1 ;; \
     esac \
     && apk add --no-cache \
+        gcompat \
         iproute2 \
         bind-tools \
         jq \
