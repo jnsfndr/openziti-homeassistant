@@ -5,9 +5,8 @@
 # Handles: PreCheck, directory migration, enrollment, identity validation.
 #
 # Enrollment strategy:
-#   If a JWT is provided via config, it is saved as a .jwt file in the identity directory.
-#   ziti-edge-tunnel auto-enrolls all *.jwt files in --identity-dir at startup.
-#   After successful enrollment, the .jwt file is consumed and a .json identity is created.
+#   If a JWT is provided via config, we run explicit enrollment before the tunnel starts.
+#   ziti-edge-tunnel enroll converts the JWT into a .json identity file.
 ####################################################################################################
 
 RUNTIME="/opt/openziti/ziti-edge-tunnel"
@@ -36,6 +35,14 @@ function PreCheck() {
         mkdir -p "${IDENTITYDIRECTORY}"
     fi
 
+    # Clean up stale JWT files from previous failed auto-enrollment attempts
+    local STALE_JWT_COUNT
+    STALE_JWT_COUNT="$(find "${IDENTITYDIRECTORY}" -type f -name "*.jwt" 2>/dev/null | wc -l)"
+    if [[ "${STALE_JWT_COUNT}" -gt 0 ]]; then
+        bashio::log.warning "Removing ${STALE_JWT_COUNT} stale .jwt file(s) from previous runs"
+        find "${IDENTITYDIRECTORY}" -type f -name "*.jwt" -delete
+    fi
+
     # Clean up IPC socket from previous runs to avoid permission issues
     # See: https://netfoundry.io/docs/openziti/reference/tunnelers/linux/linux-tunnel-troubleshooting
     if [[ -d /tmp/.ziti ]]; then
@@ -44,47 +51,47 @@ function PreCheck() {
     fi
 }
 
-function SaveJWTForAutoEnrollment() {
+function RunEnrollment() {
     local ENROLLJWT="${1}"
-    local JWT_FILE="${IDENTITYDIRECTORY}/ZTID-$(date +"%Y%m%d_%H%M%S").jwt"
+    local IDENTITY_NAME="ZTID-$(date +"%Y%m%d_%H%M%S")"
+    local IDENTITY_FILE="${IDENTITYDIRECTORY}/${IDENTITY_NAME}.json"
+    local JWT_FILE="/tmp/enroll.jwt"
 
-    bashio::log.notice "ENROLLMENT: Saving JWT for auto-enrollment at tunnel startup"
-    bashio::log.info "ENROLLMENT: JWT file: ${JWT_FILE}"
+    bashio::log.notice "ENROLLMENT: Starting..."
+    bashio::log.info "ENROLLMENT: Identity will be saved to ${IDENTITY_FILE}"
 
+    # Write JWT to temp file for enrollment
     echo "${ENROLLJWT}" > "${JWT_FILE}"
 
-    if [[ -s "${JWT_FILE}" ]]; then
-        bashio::log.notice "ENROLLMENT: JWT saved — will be auto-enrolled when tunnel starts"
+    if "${RUNTIME}" enroll --jwt "${JWT_FILE}" --identity "${IDENTITY_FILE}" 2>&1; then
+        bashio::log.notice "ENROLLMENT: Success — identity saved to ${IDENTITY_FILE}"
     else
-        bashio::log.error "ENROLLMENT: Failed to save JWT file"
-        rm -f "${JWT_FILE}"
+        bashio::log.error "ENROLLMENT: Failed — check that the JWT is valid and not expired"
+        # Clean up failed enrollment artifacts
+        rm -f "${IDENTITY_FILE}"
     fi
+
+    rm -f "${JWT_FILE}"
+
+    # Remove any empty identity files from failed enrollments
+    find "${IDENTITYDIRECTORY}" -maxdepth 1 -type f -name "*.json" -empty -delete
 }
 
 function IdentityCheck() {
-    local JSON_COUNT JWT_COUNT
+    local JSON_COUNT
 
-    JSON_COUNT="$(find "${IDENTITYDIRECTORY}" -type f -name "*.json" 2>/dev/null | wc -l)"
-    JWT_COUNT="$(find "${IDENTITYDIRECTORY}" -type f -name "*.jwt" 2>/dev/null | wc -l)"
+    # Count only .json files that are NOT config.json (tunnel status file)
+    JSON_COUNT="$(find "${IDENTITYDIRECTORY}" -type f -name "*.json" ! -name "config.json" 2>/dev/null | wc -l)"
 
     if [[ "${JSON_COUNT}" -gt 0 ]]; then
         bashio::log.info "Found ${JSON_COUNT} enrolled identity file(s):"
-        find "${IDENTITYDIRECTORY}" -type f -name "*.json" | while read -r ID; do
+        find "${IDENTITYDIRECTORY}" -type f -name "*.json" ! -name "config.json" | while read -r ID; do
             bashio::log.info "  IDENTITY: ${ID}"
         done
-    fi
-
-    if [[ "${JWT_COUNT}" -gt 0 ]]; then
-        bashio::log.info "Found ${JWT_COUNT} JWT file(s) pending auto-enrollment:"
-        find "${IDENTITYDIRECTORY}" -type f -name "*.jwt" | while read -r JWT; do
-            bashio::log.info "  PENDING: ${JWT}"
-        done
-    fi
-
-    if [[ "${JSON_COUNT}" -eq 0 ]] && [[ "${JWT_COUNT}" -eq 0 ]]; then
-        bashio::log.error "No identity files (.json) and no enrollment tokens (.jwt) found in ${IDENTITYDIRECTORY}"
+    else
+        bashio::log.error "No identity files found in ${IDENTITYDIRECTORY}"
         bashio::log.error "Please provide an EnrollmentJWT in the add-on configuration."
-        bashio::exit.nok "No valid identities or enrollment tokens available."
+        bashio::exit.nok "No valid identities available."
     fi
 }
 
@@ -97,18 +104,18 @@ ENROLLJWT="$(bashio::config 'EnrollmentJWT')"
 
 bashio::log.notice "=== OpenZiti Add-on Initialization ==="
 
-# Run pre-checks
+# Run pre-checks (also cleans up stale .jwt files)
 PreCheck
 
-# Save JWT for auto-enrollment if provided
+# Perform enrollment if a JWT is provided
 if bashio::var.has_value "${ENROLLJWT}"; then
-    bashio::log.info "Enrollment JWT provided — saving for auto-enrollment..."
-    SaveJWTForAutoEnrollment "${ENROLLJWT}"
+    bashio::log.info "Enrollment JWT provided — enrolling..."
+    RunEnrollment "${ENROLLJWT}"
 else
-    bashio::log.info "No enrollment JWT provided — skipping."
+    bashio::log.info "No enrollment JWT provided — skipping enrollment."
 fi
 
-# Verify at least one identity or pending JWT exists
+# Verify at least one identity exists
 IdentityCheck
 
 bashio::log.notice "=== Initialization complete ==="
