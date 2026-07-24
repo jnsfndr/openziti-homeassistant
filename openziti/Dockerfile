@@ -4,7 +4,7 @@ FROM ${BUILD_FROM}
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG BUILD_ARCH
-ARG ZET_VERSION="1.11.1"
+ARG ZET_VERSION="1.18.3"
 
 # Install runtime dependencies and download pre-built ziti-edge-tunnel binary
 # Using Debian base image because ziti-edge-tunnel binaries are glibc-linked

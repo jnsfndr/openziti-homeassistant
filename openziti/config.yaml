@@ -1,6 +1,6 @@
 name: "OpenZiti Tunnel"
 description: "Zero Trust bidirectional networking for Home Assistant via OpenZiti"
-version: "2.0.0"
+version: "2.0.1"
 slug: "openziti"
 url: "https://github.com/openziti/ziti-tunnel-sdk-c"
 startup: services

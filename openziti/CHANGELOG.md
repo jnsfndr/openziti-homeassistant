@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1
+
+### Changed
+- Updated ziti-edge-tunnel to v1.18.3 (was v1.11.1)
+
 ## 2.0.0
 
 ### Breaking Changes
